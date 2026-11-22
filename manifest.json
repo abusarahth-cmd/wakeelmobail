@@ -1,0 +1,36 @@
+{
+  "name": "برنامج الوكيل - إدارة قواعد السلوك والمواظبة",
+  "short_name": "الوكيل",
+  "description": "تطبيق متقدم لإدارة وتوثيق قواعد السلوك والمواظبة للطلاب على الجوال والآيباد",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1e1b4b",
+  "orientation": "any",
+  "dir": "rtl",
+  "lang": "ar",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
