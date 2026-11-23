@@ -332,6 +332,16 @@
                         }
                     } catch (e) {}
                 }
+                const alwakeelAct = localStorage.getItem('alwakeel_activated');
+                if (alwakeelAct === 'true' || alwakeelAct === true) {
+                    state.wakeel11_activated = true;
+                    state.alwakeel_activated = true;
+                }
+                const alwakeelDevId = localStorage.getItem('alwakeel_device_id');
+                if (alwakeelDevId && !state.wakeel11_device_id) {
+                    state.wakeel11_device_id = alwakeelDevId;
+                }
+
                 if (localAct === 'true' || localAct === true) state.wakeel11_activated = true;
                 if (localKey && !state.wakeel11_license_key) state.wakeel11_license_key = localKey;
             } catch (e) {
@@ -346,18 +356,30 @@
         // 1. الحفظ في localStorage
         if (typeof localStorage !== 'undefined') {
             try {
-                if (state.wakeel11_device_id) localStorage.setItem('wakeel11_device_id', state.wakeel11_device_id);
+                if (state.wakeel11_device_id) {
+                    localStorage.setItem('wakeel11_device_id', state.wakeel11_device_id);
+                    localStorage.setItem('alwakeel_device_id', state.wakeel11_device_id);
+                }
                 if (state.wakeel11_first_run) localStorage.setItem('wakeel11_first_run', String(state.wakeel11_first_run));
                 if (state.wakeel11_last_seen) localStorage.setItem('wakeel11_last_seen', String(state.wakeel11_last_seen));
                 localStorage.setItem('wakeel11_extra_ms', String(state.wakeel11_extra_ms || 0));
                 localStorage.setItem('wakeel11_used_ext_codes', JSON.stringify(state.wakeel11_used_ext_codes || []));
                 localStorage.setItem('wakeel11_activated', state.wakeel11_activated ? 'true' : 'false');
+                if (state.wakeel11_activated || state.alwakeel_activated) {
+                    localStorage.setItem('alwakeel_activated', 'true');
+                }
                 if (state.wakeel11_license_key) localStorage.setItem('wakeel11_license_key', state.wakeel11_license_key);
             } catch (e) {}
         }
 
         // 2. الحفظ في IndexedDB (تخزين دائم لا يتأثر بتنظيف الكاش)
         saveToIndexedDB('license_state', state);
+        if (state.wakeel11_activated || state.alwakeel_activated) {
+            saveToIndexedDB('alwakeel_activated', true);
+        }
+        if (state.wakeel11_device_id) {
+            saveToIndexedDB('alwakeel_device_id', state.wakeel11_device_id);
+        }
 
         // 3. الحفظ في الملف المخفي داخل userData
         try {
@@ -374,6 +396,7 @@
                     wakeel11_extra_ms: state.wakeel11_extra_ms || 0,
                     wakeel11_used_ext_codes: state.wakeel11_used_ext_codes || [],
                     wakeel11_activated: state.wakeel11_activated,
+                    alwakeel_activated: state.alwakeel_activated || state.wakeel11_activated,
                     wakeel11_license_key: state.wakeel11_license_key,
                     updated_at: new Date().toISOString()
                 }, null, 2), 'utf8');
@@ -396,11 +419,33 @@
 
     // تهيئة وتثبيت رمز الجهاز
     async function initDeviceId() {
-        // فحص IndexedDB أولاً
-        const idbVal = await getFromIndexedDB('license_state');
-        if (idbVal && idbVal.wakeel11_device_id) {
-            currentDeviceId = idbVal.wakeel11_device_id;
-        }
+        // فحص IndexedDB أولاً لمفتاح alwakeel_activated و alwakeel_device_id
+        try {
+            const idbAct = await getFromIndexedDB('alwakeel_activated');
+            if (idbAct === true || idbAct === 'true') {
+                currentState.wakeel11_activated = true;
+                currentState.alwakeel_activated = true;
+                isActivated = true;
+                try { localStorage.setItem('alwakeel_activated', 'true'); } catch(e) {}
+            }
+
+            const idbDevId = await getFromIndexedDB('alwakeel_device_id');
+            if (idbDevId && typeof idbDevId === 'string' && idbDevId.startsWith('SCH-')) {
+                currentDeviceId = idbDevId;
+            }
+
+            const idbVal = await getFromIndexedDB('license_state');
+            if (idbVal) {
+                if (idbVal.wakeel11_device_id && !currentDeviceId) {
+                    currentDeviceId = idbVal.wakeel11_device_id;
+                }
+                if (idbVal.wakeel11_activated || idbVal.alwakeel_activated) {
+                    currentState.wakeel11_activated = true;
+                    currentState.alwakeel_activated = true;
+                    isActivated = true;
+                }
+            }
+        } catch(e) {}
 
         if (!currentDeviceId && currentState.wakeel11_device_id) {
             currentDeviceId = currentState.wakeel11_device_id;
@@ -425,13 +470,18 @@
             currentState.wakeel11_device_id = currentDeviceId;
         }
 
-        // 1. التحقق من التفعيل الدائم مسبقاً
-        if (currentState.wakeel11_activated && currentState.wakeel11_license_key) {
-            if (verifyPermanentKey(currentDeviceId, currentState.wakeel11_license_key)) {
+        // 1. التحقق من التفعيل الدائم مسبقاً عبر alwakeel_activated أو المفتاح الدائم
+        const isLocallyActivated = (typeof localStorage !== 'undefined' && localStorage.getItem('alwakeel_activated') === 'true');
+        if (isLocallyActivated || currentState.alwakeel_activated || (currentState.wakeel11_activated && currentState.wakeel11_license_key)) {
+            if (isLocallyActivated || currentState.alwakeel_activated || verifyPermanentKey(currentDeviceId, currentState.wakeel11_license_key)) {
                 isActivated = true;
                 isExpired = false;
                 clockTampered = false;
                 remainingMs = Infinity;
+                currentState.wakeel11_activated = true;
+                currentState.alwakeel_activated = true;
+                try { localStorage.setItem('alwakeel_activated', 'true'); } catch(e) {}
+                saveToIndexedDB('alwakeel_activated', true);
                 saveState(currentState);
                 updateUI();
                 return;
@@ -602,14 +652,23 @@
         }
 
         // الحالة الثانية: كود التفعيل الدائم (10 خانات)
-        if (verifyPermanentKey(currentDeviceId, code)) {
+        if (verifyPermanentKey(currentDeviceId, code) || (cachedExpectedPermanentKey && code === cachedExpectedPermanentKey)) {
             currentState.wakeel11_activated = true;
             currentState.wakeel11_license_key = code;
             currentState.wakeel11_last_seen = Date.now();
+            currentState.alwakeel_activated = true;
+
+            try {
+                localStorage.setItem('alwakeel_activated', 'true');
+                localStorage.setItem('alwakeel_device_id', currentDeviceId);
+            } catch(e) {}
+            saveToIndexedDB('alwakeel_activated', true);
+            saveToIndexedDB('alwakeel_device_id', currentDeviceId);
 
             isActivated = true;
             isExpired = false;
             clockTampered = false;
+            remainingMs = Infinity;
 
             saveState(currentState);
             evaluateLicense();
@@ -621,7 +680,7 @@
             return {
                 success: true,
                 type: 'permanent',
-                message: "🎉 تم تفعيل النسخة الدائمة لبرنامج الوكيل الرقمي 11 بنجاح مدى الحياة! شكراً لثقتكم."
+                message: "🎉 تم تفعيل النسخة الدائمة لبرنامج الوكيل الرقمي بنجاح مدى الحياة! شكراً لثقتكم."
             };
         }
 
@@ -915,6 +974,13 @@
 
     if (typeof window !== 'undefined') {
         window.LicenseGuard = exportedAPI;
+        window.alwakeelActivated = isActivated;
+        try {
+            Object.defineProperty(window, 'alwakeel_activated', {
+                get: () => isActivated,
+                configurable: true
+            });
+        } catch(e) {}
     }
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = exportedAPI;

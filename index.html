@@ -293,6 +293,10 @@
         }
     </script>
 
+    <!-- jsPDF & AutoTable for iOS / iPadOS and Web PDF Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
     <!-- Core Engine Scripts: IndexedDB, Print Preview & PDF, Noor Parser, Custom Dropdown, Custom DatePicker -->
     <script src="assets/js/storage-db.js"></script>
     <script src="assets/js/print-preview.js"></script>
@@ -339,9 +343,24 @@
         }
         select, input[type="date"], input[type="checkbox"], input[type="radio"], input[type="button"], input[type="submit"], input[type="file"] {
             cursor: pointer !important;
+            touch-action: manipulation !important;
+            -webkit-tap-highlight-color: transparent !important;
         }
         input:focus, textarea:focus, select:focus {
             outline: none !important;
+        }
+
+        /* إصلاح استجابة الأزرار والتفاعل باللمس على الآيفون والآيباد iOS Touch Fix */
+        button, a, select, input[type="button"], input[type="submit"], [role="button"], .cursor-pointer, .tab-btn {
+            cursor: pointer !important;
+            touch-action: manipulation !important;
+            -webkit-tap-highlight-color: transparent !important;
+            -webkit-touch-callout: none !important;
+        }
+
+        /* منع أي عناصر زخرفية من حجب النقر عن الأزرار والروابط */
+        .decorative, .bg-decoration, [aria-hidden="true"]:not(button):not(i):not(a) {
+            pointer-events: none !important;
         }
 
         /* دعم كامل لمسافات الأمان الآمنة لجوالات الآيفون والآيباد (iOS Safe Area) */
@@ -5030,42 +5049,47 @@
         }
         window.ensureInputsReadyAndUnfrozen = ensureInputsReadyAndUnfrozen;
 
-        // نظام الإشعارات العائمة التفاعلية (Toast) كبديل لـ alert لمنع تجميد Electron نهائياً
-        function showWakeelToast(message, type = 'info') {
+        // دالة إشعارات موحدة showToast آمنة في منتصف الشاشة وتحت مسافة الأمان لـ iOS
+        function showToast(message, type = 'info') {
             try {
                 let container = document.getElementById('wakeel-toast-container');
                 if (!container) {
                     container = document.createElement('div');
                     container.id = 'wakeel-toast-container';
-                    container.style.cssText = 'position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 99999999; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; font-family: "Tajawal", system-ui, sans-serif;';
+                    container.style.cssText = 'position: fixed; top: calc(env(safe-area-inset-top, 20px) + 70px); left: 50%; transform: translateX(-50%); z-index: 9999999; display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; font-family: "Tajawal", system-ui, sans-serif; width: 100%; max-width: 90vw;';
                     document.body.appendChild(container);
                 }
 
                 const msgStr = String(message || '');
-                const isError = msgStr.includes('خطأ') || msgStr.includes('إشكال') || msgStr.includes('غير صحيح') || type === 'error';
-                const isWarning = msgStr.includes('تنبيه') || msgStr.includes('تحذير') || msgStr.includes('يرجى') || type === 'warning';
+                const isError = msgStr.includes('خطأ') || msgStr.includes('إشكال') || msgStr.includes('غير صحيح') || type === 'error' || type === 'danger';
+                const isSuccess = msgStr.includes('نجاح') || msgStr.includes('تم ') || msgStr.includes('✓') || msgStr.includes('✅') || type === 'success';
+                const isWarning = !isError && !isSuccess && (msgStr.includes('تنبيه') || msgStr.includes('تحذير') || msgStr.includes('يرجى') || type === 'warning');
 
-                let borderCol = '#10b981'; // أخضر للنجاح
-                let iconClass = 'fa-circle-check';
-                let iconCol = '#34d399';
+                let bgColor = '#1e3a8a'; // أزرق للتنبيه / المعلومات
+                let borderCol = '#60a5fa';
+                let iconClass = 'fa-circle-info';
 
-                if (isError) {
-                    borderCol = '#f43f5e'; // أحمر للخطأ
+                if (isSuccess) {
+                    bgColor = '#065f46'; // أخضر عالي التباين للنجاح
+                    borderCol = '#34d399';
+                    iconClass = 'fa-circle-check';
+                } else if (isError) {
+                    bgColor = '#991b1b'; // أحمر عالي التباين للخطأ
+                    borderCol = '#f87171';
                     iconClass = 'fa-circle-exclamation';
-                    iconCol = '#fb7185';
                 } else if (isWarning) {
-                    borderCol = '#f59e0b'; // برتقالي للتنبيه
+                    bgColor = '#92400e'; // برتقالي داكن للتنبيه
+                    borderCol = '#fbbf24';
                     iconClass = 'fa-triangle-exclamation';
-                    iconCol = '#fbbf24';
                 }
 
                 const toast = document.createElement('div');
-                toast.style.cssText = `pointer-events: auto; display: flex; align-items: center; gap: 12px; min-width: 320px; max-width: 85vw; background: #0f172a; color: #f8fafc; padding: 12px 18px; border-radius: 12px; border: 2px solid ${borderCol}; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); font-size: 13px; font-weight: 700; line-height: 1.5; transform: translateY(-15px); opacity: 0; transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1); direction: rtl; text-align: right;`;
+                toast.style.cssText = `position: relative; pointer-events: auto; display: flex; align-items: center; justify-content: center; gap: 12px; min-width: 280px; max-width: 90vw; background: ${bgColor}; color: #ffffff; padding: 14px 20px; border-radius: 12px; border: 2px solid ${borderCol}; box-shadow: 0 10px 25px rgba(0,0,0,0.35); font-size: 15px; font-weight: bold; text-align: center; line-height: 1.5; transform: translateY(-20px); opacity: 0; transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1); direction: rtl;`;
 
                 toast.innerHTML = `
-                    <i class="fa-solid ${iconClass}" style="color: ${iconCol}; font-size: 18px; flex-shrink: 0;"></i>
+                    <i class="fa-solid ${iconClass}" style="font-size: 20px; flex-shrink: 0;"></i>
                     <div style="flex: 1; word-break: break-word;">${msgStr}</div>
-                    <button type="button" style="background: transparent; border: none; color: #94a3b8; font-size: 14px; cursor: pointer; padding: 2px 6px; display: flex; align-items: center; justify-content: center;" title="إغلاق">
+                    <button type="button" style="background: rgba(255,255,255,0.2); border: none; color: #ffffff; font-size: 14px; cursor: pointer; padding: 4px 8px; border-radius: 6px; display: flex; align-items: center; justify-content: center;" title="إغلاق">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
                 `;
@@ -5073,10 +5097,10 @@
                 const closeBtn = toast.querySelector('button');
                 closeBtn.onclick = () => {
                     toast.style.opacity = '0';
-                    toast.style.transform = 'translateY(-15px)';
+                    toast.style.transform = 'translateY(-20px)';
                     setTimeout(() => {
                         toast.remove();
-                        restoreAppFocusAndUnfreeze();
+                        if (typeof restoreAppFocusAndUnfreeze === 'function') restoreAppFocusAndUnfreeze();
                     }, 250);
                 };
 
@@ -5090,23 +5114,72 @@
                 setTimeout(() => {
                     if (toast.parentNode) {
                         toast.style.opacity = '0';
-                        toast.style.transform = 'translateY(-15px)';
+                        toast.style.transform = 'translateY(-20px)';
                         setTimeout(() => {
                             toast.remove();
-                            restoreAppFocusAndUnfreeze();
+                            if (typeof restoreAppFocusAndUnfreeze === 'function') restoreAppFocusAndUnfreeze();
                         }, 250);
                     }
-                }, 3800);
+                }, 4000);
             } catch(e) {
-                console.warn("showWakeelToast error:", e);
+                console.warn("showToast error:", e);
             }
         }
-        window.showWakeelToast = showWakeelToast;
+        window.showToast = showToast;
+        window.showWakeelToast = showToast;
+
+        // دالة تصدير الجداول لملفات Word (.doc) متوافقة مع الجوال والكمبيوتر
+        window.exportReportWord = function(tableOrId, filename = 'تقرير_الوكيل.doc') {
+            try {
+                let table = null;
+                if (typeof tableOrId === 'string') table = document.getElementById(tableOrId);
+                else if (tableOrId && tableOrId.nodeType) table = tableOrId;
+                if (!table) table = document.querySelector('#printArea table') || document.querySelector('table:not(.hidden)');
+                if (!table) {
+                    showToast("لا يوجد جدول ظاهر لتصديره كـ Word", "warning");
+                    return;
+                }
+                const schoolName = (window.appState && window.appState.settings && window.appState.settings.schoolName) || 'المملكة العربية السعودية - وزارة التعليم';
+                const docHtml = `
+                    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+                    <head><meta charset='utf-8'><title>${filename}</title>
+                    <style>
+                        body { font-family: 'Tajawal', Arial, sans-serif; direction: rtl; text-align: right; margin: 20px; }
+                        table { border-collapse: collapse; width: 100%; margin-top: 15px; }
+                        th, td { border: 1px solid #333; padding: 6px 8px; text-align: center; }
+                        th { background-color: #0f4c4c; color: #fff; font-weight: bold; }
+                    </style>
+                    </head>
+                    <body>
+                        <div style="text-align: center; margin-bottom: 20px;">
+                            <h2>${schoolName}</h2>
+                            <h3>${filename.replace(/\.doc$/i, '')}</h3>
+                        </div>
+                        ${table.outerHTML}
+                    </body>
+                    </html>
+                `;
+                const blob = new Blob(['\ufeff', docHtml], { type: 'application/msword;charset=utf-8' });
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+                if (isIOS && navigator.canShare && navigator.canShare({ files: [new File([blob], filename, { type: 'application/msword' })] })) {
+                    navigator.share({ files: [new File([blob], filename, { type: 'application/msword' })], title: filename });
+                } else {
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = filename;
+                    link.click();
+                }
+                showToast("تم تصدير ملف Word بنجاح!", "success");
+            } catch(e) {
+                console.warn('Word export error:', e);
+                showToast("تعذر تصدير ملف Word: " + e.message, "error");
+            }
+        };
 
         // استبدال alert بنظام Toast غير حاجب للواجهة مع استعادة التركيز فوراً
         window.alert = function(msg) {
-            showWakeelToast(msg);
-            restoreAppFocusAndUnfreeze();
+            showToast(msg);
+            if (typeof restoreAppFocusAndUnfreeze === 'function') restoreAppFocusAndUnfreeze();
         };
 
         // استبدال confirm بنظام الحوار المتوافق مع Electron لتفادي أي تجميد
